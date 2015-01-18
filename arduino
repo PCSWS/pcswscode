@@ -1,0 +1,257 @@
+// Parked Car Early Warning System
+// Last edited: 12/12/2014
+// Purpose: Monitor environmental sensors and alarm when unhealthy conditions exist while people or animals are present.
+
+#include <math.h>;
+
+int lightLED = 12;
+int tempLED = 8;
+int motionLED = 7;
+int soundLED = 4;
+
+/* Future - sound sample averaging
+int snd1 = 0;
+int snd2 = 0;
+int snd3 = 0;
+*/
+
+boolean lightTriggered = false;
+boolean tempTriggered = false;
+boolean motionTriggered = false;
+boolean soundTriggered = false;
+
+int buttonState = 0;         // variable for reading the pushbutton status
+int button_pin = 5;      // pin of the button
+int speaker_pin = 3;   
+int temp_pin = A0;       // pin of temperature sensor
+int led = 13;
+int motion_pin = 2;      // pin of PIR sensor
+int motion_state = 0;
+int sound_pin = A3;      // pin of Sound Sensor
+float temperature;
+int B=3975;                  // B value of the thermistor
+float resistance;
+int light_pin = A1;
+
+//Thresholds
+int light_threshold=760; //Note:put back to 740 = dark
+int safetemp_threshold=100; //in Fahrenheit
+int sound_threshold=100;  //Note: put back to 270 = loud
+
+//Read values
+int lightValue;
+int tempValue;
+int motionValue;
+int soundValue;
+
+boolean RL = false;
+boolean RT = false;
+boolean RM = false;
+boolean RS = false;
+
+void setup(){
+    Serial.begin(9600);
+    digitalWrite(led,LOW);
+    pinMode(led, OUTPUT);
+    pinMode(motion_pin,INPUT);
+    pinMode(lightLED, OUTPUT);
+    pinMode(tempLED, OUTPUT);
+    pinMode(motionLED, OUTPUT);
+    pinMode(soundLED, OUTPUT);
+    pinMode(speaker_pin, OUTPUT);
+    pinMode(button_pin, INPUT);     
+//Startup LED indicator sequence
+   for(int i = 0; i < 5; i++){
+     digitalWrite(lightLED, HIGH);
+     digitalWrite(soundLED, LOW);
+     digitalWrite(motionLED, HIGH);
+     digitalWrite(tempLED, LOW);
+     delay(500);
+     digitalWrite(lightLED, LOW);
+     digitalWrite(soundLED, HIGH);
+     digitalWrite(motionLED, LOW);
+     digitalWrite(tempLED, HIGH);
+     delay(500);
+    }
+     allLEDSoff(); 
+}
+
+void loop() {
+
+/*
+boolean RL = readLight();
+boolean RT = readTemp();
+boolean RM = readMotion();
+boolean RS = readSound();
+*/
+
+//Only sample sensors until they have been triggered
+if (RL != true){RL = readLight();}
+if (RT != true){RT = readTemp();}
+if (RM != true){RM = readMotion();}
+if (RS != true){RS = readSound();}
+
+//Turn on LED indicators after each threshold is trigggered 
+digitalWrite(lightLED,lightTriggered);
+digitalWrite(tempLED,tempTriggered);
+digitalWrite(motionLED,motionTriggered);
+digitalWrite(soundLED,soundTriggered);
+
+//Debug to Serial Console. Comment this out when not needed
+Serial.print(lightTriggered);
+Serial.print(tempTriggered);
+Serial.print(motionTriggered);
+Serial.print(soundTriggered);
+Serial.println();  
+Serial.print(RL);
+Serial.print(RT);
+Serial.print(RM);
+Serial.print(RS);
+Serial.println();  
+
+//Main alarm logic. If all conditions are true then alarm. 
+if (RL && RT && RM && RS) {
+Serial.println ("ALERTS ");
+printValues();
+alarm(); 
+}else{
+Serial.print ("NO WORRIES ");
+printValues();
+}  
+
+delay(200);          //short delay between main loop cycles
+
+} //END VOID LOOP!!
+
+
+
+//All custom functions below this point
+
+void allLEDSoff() {
+       digitalWrite(lightLED, LOW);
+       digitalWrite(soundLED, LOW);
+       digitalWrite(motionLED, LOW);
+       digitalWrite(tempLED, LOW);
+}
+
+
+
+void printValues(){
+      Serial.print("L: ");
+      Serial.print(lightValue);
+      Serial.print("  T: ");
+      Serial.print(tempValue);
+      Serial.print("  M: ");
+      Serial.print(motionValue);
+      Serial.print("  S: ");
+      Serial.println(soundValue);  
+}
+
+
+
+void playTone(int tone, int duration) {
+    for (long i = 0; i < duration * 1000L; i += tone * 2) {
+        digitalWrite(speaker_pin, HIGH);
+        delayMicroseconds(tone);
+        digitalWrite(speaker_pin, LOW);
+        delayMicroseconds(tone);
+    }
+}
+
+
+
+void playNote(char note, int duration) {
+    char names[] = { 'c', 'd', 'e', 'f', 'g', 'a', 'b', 'C' };
+    int tones[] = { 1915, 1700, 1519, 1432, 1275, 1136, 1014, 956 };
+
+    // play the tone corresponding to the note name
+    for (int i = 0; i < 8; i++) {
+        if (names[i] == note) {
+            playTone(tones[i], duration);
+        }
+    }
+}
+
+
+
+void alarm() {
+//Turn on one time things
+// turn on buzzer
+do {
+playNote('c',100);
+//delay(15000);
+// read the state of the pushbutton value:
+buttonState = digitalRead(button_pin);
+} while (buttonState == 0);
+
+while (true)
+    {
+        // do stuff forever. Infinate loop end. (Must be powered OFF at this point. Code a full reset/restart in the future.
+    }
+} 
+
+
+
+boolean readTemp(){
+    int temp_sensorValue = analogRead(temp_pin);                               // get analog value
+    delay(50);
+    tempValue = temp_sensorValue;
+    resistance=(float)(1023-temp_sensorValue)*10000/temp_sensorValue;                      // get resistance
+    temperature=1/(log(resistance/10000)/B+1/298.15)-273.15;     // calc temperature
+    temperature = (temperature * 9.0)/ 5.0 + 32.0; // Convert Celcius to Fahrenheit
+    tempValue = temperature;
+      if (temperature > safetemp_threshold) {
+        tempTriggered = true;
+        return true; 
+      }else{
+       return false;
+      }
+}
+
+
+
+boolean readLight() {
+ int light_sensorValue = analogRead(light_pin);
+ delay(50);
+ lightValue = light_sensorValue;
+      if(light_sensorValue > light_threshold)  {
+        lightTriggered = true;
+        return true; 
+      }else{
+       return false;
+      }
+}
+
+ 
+ 
+boolean readMotion() {
+motion_state = digitalRead(motion_pin);
+delay(50);
+motionValue = motion_state;
+    if (motion_state == 1) {
+      motionTriggered = true;
+      return true; 
+    }else{
+     return false;
+    }
+}
+
+
+
+boolean readSound(){
+int sound_sensorValue = analogRead(sound_pin);   //read the sensorValue on Analog 0
+delay(50);
+//snd3 = snd2;
+//snd2 = snd1;
+//snd1 = sound_sensorValue;
+//soundValue = (snd1 + snd2 + snd3)/3;
+soundValue = sound_sensorValue;
+   if(sound_sensorValue > sound_threshold) {
+     soundTriggered = true;
+     return true; 
+    }else{
+    return false;
+    }
+}
+  
+
